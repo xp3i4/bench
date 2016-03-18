@@ -26,8 +26,12 @@ endif (NOT CXX11_FOUND)
 <<<<<<< HEAD
 set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB BZIP2)
 =======
+<<<<<<< HEAD
+set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB BZIP2)
+=======
 set (SEQAN_FIND_DEPENDENCIES ZLIB BZip2)
 >>>>>>> origin/develop
+>>>>>>> develop
 find_package (SeqAn REQUIRED)
 
 # Warn if Zlib was not found.
