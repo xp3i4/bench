@@ -23,11 +23,8 @@ if (NOT CXX11_FOUND)
 endif (NOT CXX11_FOUND)
 
 # Search SeqAn and select dependencies.
-<<<<<<< HEAD
 set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB BZIP2)
-=======
 set (SEQAN_FIND_DEPENDENCIES ZLIB BZip2)
->>>>>>> origin/develop
 find_package (SeqAn REQUIRED)
 
 # Warn if Zlib was not found.
@@ -87,6 +84,11 @@ add_executable(bench_qgrams_construct qgrams_construct.cpp options.h types.h run
 add_executable(bench_qgrams_find qgrams_find.cpp options.h types.h run.h misc.h)
 add_executable(bench_asm_filter asm_filter.cpp options.h types.h run.h misc.h verifier.h)
 add_executable(bench_minimizer minimizer.cpp)
+add_executable(bench_hash hash.cpp)
+add_executable(bench_hash2 hash2.cpp)
+add_executable(bench_hash3 hash3.cpp)
+add_executable(ctest1 test1.cpp)
+
 
 # Add dependencies found by find_package (SeqAn).
 target_link_libraries (bench_io_dump ${SEQAN_LIBRARIES})
@@ -97,6 +99,11 @@ target_link_libraries (bench_qgrams_construct ${SEQAN_LIBRARIES})
 target_link_libraries (bench_qgrams_find ${SEQAN_LIBRARIES})
 target_link_libraries (bench_asm_filter ${SEQAN_LIBRARIES})
 target_link_libraries (bench_minimizer ${SEQAN_LIBRARIES})
+target_link_libraries (bench_hash ${SEQAN_LIBRARIES})
+target_link_libraries (bench_hash2 ${SEQAN_LIBRARIES})
+target_link_libraries (bench_hash3 ${SEQAN_LIBRARIES})
+target_link_libraries (ctest1 ${SEQAN_LIBRARIES})
+
 
 # ----------------------------------------------------------------------------
 # Installation
@@ -130,7 +137,7 @@ install (FILES LICENSE README
 
 #-----------------------------------------------------------------------------
 #-----------------------------------------------------------------------------
-add_subdirectory(integrated_interface)
+#add_subdirectory(integrated_interface)
 # ----------------------------------------------------------------------------
 # CPack Install
 # ----------------------------------------------------------------------------
