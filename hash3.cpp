@@ -332,18 +332,18 @@ int _qgramCountQGrams(TDir& dir, StringSet<DnaString>& StringSet, TShape shape, 
         {
             if (countb < blocklimit)
             {
-                requestBucket(dir, dirStart, _makeHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(dirStart + hk - countb));
+                requestDir(dir, dirStart, _makeHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(dirStart + hk - countb));
                 for (unsigned j = 0; j < countb; j++)
                     _setBodyType_Begin(dir[dirStart + hk - countb]);
             }
             else
             {
                 hk -= countb;
-                requestBucket(dir, dirStart, _makeVtlHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(dirStart + hk));
+                requestDir(dir, dirStart, _makeVtlHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(dirStart + hk));
                 for (uint64_t j = k - countx; j < k; j++)
                     if (std::get<1>(hs[j]) != std::get<1>(hs[j + 1]))
                     {
-                        requestBucket(dir, dirStart, _makeHVlHeadNode(std::get<1>(hs[j])), _makeEmptyNode(dirStart+hk));
+                        requestDir(dir, dirStart, _makeHVlHeadNode(std::get<1>(hs[j])), _makeEmptyNode(dirStart+hk));
                         _setBodyType_Begin(dir[dirStart + hk]);
                         hk++;
                     }
@@ -416,6 +416,7 @@ int mTest1(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
     //resize(indexDir(index), _fullDirLength(index));
     resize (indexDir(index), _fullDirLength(index) + lengthSum(reads));
     index.start = _fullDirLength(index);
+    index._Empty_Dir_ = index.start - 2;
 
     std::cout << "mTest(): index dir length " << _fullDirLength(index)<< " length(index.dir)= " << length(index.dir) << std::endl;
 
@@ -442,7 +443,7 @@ int mTest1(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
         {
             hashNext(shape, it + j);
             //sum = _getBodyCounth(index.dir[getBucket(indexDir(index), shape.XValue, shape.YValue, shape.hValue)+1] - index.dir[getBucket(indexDir(index), shape.XValue, shape.YValue, shape.hValue)]);
-             sum = index.dir[getBucket(indexDir(index), index.start, shape.XValue, shape.YValue, shape.hValue)+1]-1;
+             sum = index.dir[getDir(index, shape)];
         }
     }
     sum=_getBodyCounth(sum);
@@ -726,9 +727,9 @@ int umTest(StringSet<DnaString> & reads,  StringSet<DnaString> & genome)
     TShape shape;
     TIndex index1(reads);
     uint64_t dirh = 0;
-    resize (indexDir(index1), _fullDirLength(index1) + lengthSum(reads));
+    resize (indexDir(index1), _fullDirLength(index1) + lengthSum(reads)+2);
     index1.start = _fullDirLength(index1);
-
+    index1._Empty_Dir_ = length(index1) - 2;
 
     for (unsigned k = 0; k < length(indexDir(index1)); k++)
     {
@@ -764,20 +765,14 @@ int umTest(StringSet<DnaString> & reads,  StringSet<DnaString> & genome)
         {
             hashNext(t_shape, it + j);
             hashNext(shape, it + j);
-            //hash(t_shape, it+j);
-            //hash(shape, it+j);
-            //if(index.bucketMap.qgramCode[getBucket(index.bucketMap, t_shape.hValue)] == -1);
-            //    std::cout << getBucket(index1.dir, shape.XValue, shape.YValue, shape.hValue) << " " << t_shape.hValue << " " << shape.hValue << std::endl; 
-            //if (t_shape.hValue - shape.hValue)
-            if ((uint64_t)t_shape.hValue - (uint64_t)shape.hValue != 0)
-            {
+            if ((uint64_t)t_shape.hValue - (uint64_t)shape.hValue)
                 std::cout << j << "hValue " << t_shape.hValue << " " <<  shape.hValue << std::endl;
-            }
             v1=h2y(shape, index.bucketMap.qgramCode[getBucket(index.bucketMap, t_shape.hValue)]);
-            v2=_getBodyValue(index1.dir[getBucket(index1.dir, index1.start, shape.XValue, shape.YValue, shape.hValue)]);
+            v2=_getBodyValue(index1.dir[getDir(index1, shape)]);
+            //v2=_getBodyValue(index1.dir[getBucket(index1.dir, index1.start, shape.XValue, shape.YValue, shape.hValue)]);
             if (v1 != v2)
                 if (v1 != 327679 || v2 != 0)
-                    std::cout << "unequal " << t_shape.hValue << " " << getBucket(index1.dir, index1.start, shape.XValue, shape.YValue, shape.hValue) << " " << shape.hValue << " " << v2 << std::endl;
+                    std::cout << "unequal " << t_shape.hValue << " " << getDir(index1, shape) << " " << shape.hValue << " " << v2 << std::endl;
         }
     }
     std::cout << s << std::endl << sysTime() - start << std::endl;
@@ -803,11 +798,11 @@ int main(int argc, char** argv)
     //{
     //    alpha = 2 + (float)k / 10;
     //    std::cout << alpha << std::endl;
-    //uTest(reads, genome, 1.8);
+    uTest(reads, genome, 1.8);
     //    std::cout << std::endl;
     //}
     //mTest1(reads, genome);
-    umTest(reads, genome);
+    //umTest(reads, genome);
     TShape shape;
     std::cout << h2y(shape, (uint64_t)-1) << std::endl;
 }
