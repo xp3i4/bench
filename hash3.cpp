@@ -289,7 +289,9 @@ int _qgramCountQGrams(TDir& dir, StringSet<DnaString>& StringSet, TShape shape, 
     String<TShape> hs3;
     HvalueType  m=0;
     uint64_t sum=0;
-
+    unsigned c[1000000];
+    for(unsigned k=0; k<1000000; k++)
+        c[k]=0;
     double start=sysTime();
     resize(hs, lengthSum(StringSet) - length(StringSet) * (shape.span - 1) + 1);
     resize(hs3, lengthSum(StringSet) - length(StringSet) * (shape.span - 1) + 1);
@@ -318,6 +320,8 @@ int _qgramCountQGrams(TDir& dir, StringSet<DnaString>& StringSet, TShape shape, 
     std::cout << "done" << std::endl;
     for (uint64_t k = 1; k < length(hs); k++)
     {
+        //if (k%10000 == 0||k>length(hs) -100)
+        //std::cout <<"k "<< k << std::endl;
         if (std::get<1>(hs[k]) != std::get<1>(hs[k - 1]))
         {
             _setBodyNode(dir[dirStart + hk], std::get<2>(hs[k-1]), _BodyType_code, counth);
@@ -330,6 +334,7 @@ int _qgramCountQGrams(TDir& dir, StringSet<DnaString>& StringSet, TShape shape, 
 
         if (std::get<0>(hs[k]) != std::get<0>(hs[k - 1]))
         {
+            c[countb]++;
             if (countb < blocklimit)
             {
                 requestDir(dir, dirStart, _makeHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(dirStart + hk - countb));
@@ -358,6 +363,17 @@ int _qgramCountQGrams(TDir& dir, StringSet<DnaString>& StringSet, TShape shape, 
     }
     std::cout << "done" << std::endl;
     resize(dir, dirStart + counth + 10);
+      
+    unsigned s=0,s1=0;
+    //for (unsigned k = 0; k < 100000; k++)
+    //    s+=c[k];
+    //for(unsigned k =0;k < 100000;k++)
+    //{
+    //    s1+=c[k];
+    //    if(c[k]!=0)
+    //        std::cout <<k << " " << (float)s1/s << std::endl;
+    //}
+            
     return 0;
 }
 
@@ -414,11 +430,11 @@ int mTest1(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
     //unsigned count = 0;
     uint64_t sum = 0, dirh = 0;
     //resize(indexDir(index), _fullDirLength(index));
-    resize (indexDir(index), _fullDirLength(index) + lengthSum(reads));
+    resize (indexDir(index), _fullDirLength(index) + lengthSum(reads)+2);
     index.start = _fullDirLength(index);
-    index._Empty_Dir_ = index.start - 2;
+    index._Empty_Dir_ = length(index.dir) - 2;
 
-    std::cout << "mTest(): index dir length " << _fullDirLength(index)<< " length(index.dir)= " << length(index.dir) << std::endl;
+    std::cout << "mTest1(): index dir length " << _fullDirLength(index)<< " length(index.dir)= " << length(index.dir) << std::endl;
 
     for (unsigned k = 0; k < length(indexDir(index)); k++)
     {
@@ -729,7 +745,7 @@ int umTest(StringSet<DnaString> & reads,  StringSet<DnaString> & genome)
     uint64_t dirh = 0;
     resize (indexDir(index1), _fullDirLength(index1) + lengthSum(reads)+2);
     index1.start = _fullDirLength(index1);
-    index1._Empty_Dir_ = length(index1) - 2;
+    index1._Empty_Dir_ = length(index1.dir) - 2;
 
     for (unsigned k = 0; k < length(indexDir(index1)); k++)
     {
@@ -801,7 +817,7 @@ int main(int argc, char** argv)
     uTest(reads, genome, 1.8);
     //    std::cout << std::endl;
     //}
-    //mTest1(reads, genome);
+    mTest1(reads, genome);
     //umTest(reads, genome);
     TShape shape;
     std::cout << h2y(shape, (uint64_t)-1) << std::endl;

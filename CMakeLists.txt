@@ -87,6 +87,7 @@ add_executable(bench_minimizer minimizer.cpp)
 add_executable(bench_hash hash.cpp)
 add_executable(bench_hash2 hash2.cpp)
 add_executable(bench_hash3 hash3.cpp)
+add_executable(bench_hash4 hash4.cpp)
 add_executable(ctest1 test1.cpp)
 
 
@@ -102,6 +103,7 @@ target_link_libraries (bench_minimizer ${SEQAN_LIBRARIES})
 target_link_libraries (bench_hash ${SEQAN_LIBRARIES})
 target_link_libraries (bench_hash2 ${SEQAN_LIBRARIES})
 target_link_libraries (bench_hash3 ${SEQAN_LIBRARIES})
+target_link_libraries (bench_hash4 ${SEQAN_LIBRARIES})
 target_link_libraries (ctest1 ${SEQAN_LIBRARIES})
 
 
