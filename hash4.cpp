@@ -7,6 +7,8 @@
 #include <seqan/basic.h>
 #include <bitset>
 
+#define nl std::endl;
+
 using namespace seqan;
 
 const unsigned shapelength = 25;
@@ -44,6 +46,7 @@ void _qgramClearDir(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan,
     std::cout << "            End _qgramClearDir()" << std::endl;
 }
 
+/*
 template <unsigned TSpan, unsigned TWeight>
 void _qgramCountQGrams(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan, TWeight>, OpenAddressing > > & index)
 {
@@ -129,6 +132,100 @@ void _qgramCountQGrams(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSp
     index._Empty_Dir_ = index.start + countdh + 1;
     std::cout << "            End _qgramCountQGrams() sysTime(): " << sysTime() - time << std::endl;
 }
+*/
+
+template <unsigned TSpan, unsigned TWeight>
+void _qgramCountQGrams(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan, TWeight>, OpenAddressing > > & index)
+{
+    typedef Shape<Dna, MinimizerShape<TSpan, TWeight> > TM_Shape;
+    typedef typename Value<TM_Shape>::Type HValue;
+    typedef std::tuple<HValue, HValue, HValue, HValue> HTuple;
+    typedef String<HTuple> Stringtuple;
+
+    TM_Shape shape;
+    Stringtuple hs, hs1;
+    HValue  m = 0, sum = 0;
+
+    double time = sysTime();
+    resize(hs, lengthSum(indexText(index)) - length(indexText(index)) * (shape.span - 1) + 1);
+
+    std::cout << "        _qgramCountQGrams() sysTime(): " << sysTime() - time << std::endl;
+    std::cout << "            lengthSum(StringSet) = " << lengthSum(indexText(index)) << std::endl;
+    for(HValue k = 0; k < length(indexText(index)); k++)
+    {
+        TIter it = begin(indexText(index)[k]);
+        hashInit(shape, it);
+        for (HValue j = 0; j < length(indexText(index)[k]) - shape.span + 1; j++)
+        {
+            hashNext(shape, it + j);
+            hs[m++] = std::make_tuple(shape.XValue, shape.hValue, shape.YValue, _createSANode(k, j));
+        }
+    }
+    std::cout << "            make_tuple sysTime(): " << sysTime() - time << std::endl;
+    //hs[length(hs) - 1] = std::make_tuple((HValue)0, (HValue)0, (HValue)0, (HValue)1);
+    std::sort(begin(hs), end(hs) - 1,
+        [](const HTuple &a, const HTuple &b)
+        {return (std::get<0>(a) > std::get<0>(b)||(std::get<0>(a) == std::get<0>(b) && std::get<1>(a) > std::get<1>(b)));});
+    hs[length(hs) - 1] = std::make_tuple((HValue)1, (HValue)1, (HValue)0, (HValue)1);
+    std::cout << "            sort sysTime(): " << sysTime() - time << std::endl;
+    HValue countx = 1, counth = 1, tmp = 0, countdh = 0, countb = 1, hk = 0;
+    resize(index.sa, length(hs) - 1);
+    for (HValue k = 1; k < length(hs); k++)
+    {
+        //std::cout << k << std::endl;
+        index.sa[k - 1] = std::get<3>(hs[k-1]);
+        if (std::get<1>(hs[k]) != std::get<1>(hs[k - 1]))
+        { _setBodyNode(index.dir[index.start + hk], std::get<2>(hs[k-1]), _BodyType_code, tmp);
+            //std::cout << counth << std::endl;
+            hk++;
+            countb++;
+            countdh++;
+            tmp = counth;
+        }
+        //else
+        counth++;
+
+        if (std::get<0>(hs[k]) != std::get<0>(hs[k - 1]))
+        {
+            if (countb < blocklimit)
+            {
+                requestDir(index.dir, index.start, _makeHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(index.start + hk - countb));
+                for (HValue j = 0; j < countb; j++)
+                    _setBodyType_Begin(index.dir[index.start + hk - countb]);
+            }
+            else
+            {
+                hk -= countb;
+                requestDir(index.dir, index.start, _makeVtlHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(index.start + hk));
+                for (HValue j = k - countx; j < k; j++)
+                    if (std::get<1>(hs[j]) != std::get<1>(hs[j + 1]))
+                    {
+                        requestDir(index.dir, index.start, _makeHVlHeadNode(std::get<1>(hs[j])), _makeEmptyNode(index.start+hk));
+                        _setBodyType_Begin(index.dir[index.start + hk]);
+                        hk++;
+                    }
+            }
+            countb = 0;
+            countx = 1;
+        }
+        else
+        {
+            countx++;
+        }
+    }
+    std::cout << nl;
+    std::cout << counth << std::endl;
+    resize(index.dir, index.start + countdh + 10);
+    _setBodyNode(index.dir[index.start + countdh], _bitEmpty, _BodyType_code, counth - 1); 
+    _setBodyType_Begin(index.dir[index.start + countdh]);
+    index._Empty_Dir_ = index.start + countdh + 1;
+    //_setBodyNode(index.dir[index.start + countdh], _bitEmpty, _BodyTypeEnd_code, counth - 1); 
+    //_setBodyType_Begin(index.dir[index.start + countdh]);
+    //index._Empty_Dir_ = index.start + countdh;
+    //_setBodyNode(index.dir[index.start + countdh + 1], _bitEmpty, _BodyTypeEnd_code, counth - 1); 
+    //_setBodyType_Begin(index.dir[index.start + countdh + 1]);
+    std::cout << "            End _qgramCountQGrams() sysTime(): " << sysTime() - time << std::endl;
+}
 
 template <unsigned TSpan, unsigned TWeight>
 void createQGramIndexDirOnly(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan, TWeight>, OpenAddressing > >& index)
@@ -212,6 +309,41 @@ int mTest2(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
     return 0;
 }
 
+int mTest3(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
+{
+    TShape shape, shape1;
+    TIndex index(reads);
+    uint64_t sum = 0, p = 0;
+    double time = sysTime();
+    std::cout << "mTest3(): " << std::endl;
+    createQGramIndexDirOnly(index);
+    std::cout << "    getDir start sysTime(): " << sysTime() - time << std::endl;
+    std::cout << "    length Dir = " << length(index.dir) << std::endl;
+    std::cout << "    length Text = " << lengthSum(indexText(index)) << std::endl;
+    std::cout << "    length SA = " << length(index.sa) << std::endl;
+    for(uint64_t k = 0; k < length(genome); k++)
+    {
+        TIter it = begin(genome[k]);
+        hashInit(shape, it);
+        for (uint64_t j = 0; j < length(genome[k]) - shape.span + 1; j++)
+        {
+            hashNext(shape, it + j);
+            p = getDir(index, shape);
+            for (uint64_t n = _getBodyCounth(index.dir[p]); n < _getBodyCounth(index.dir[p + 1]); n++)
+            {
+                sum ^= _getSA_i2(index.sa[n]);
+            }
+        }
+    }
+    std::cout << "    sum = " << sum << std::endl;
+    std::cout << "    getDir end sysTime(): " << sysTime() - time << std::endl;
+    std::cout << "    End mTest1()" << std::endl;
+
+    return 0;
+}
+
+
+
 int uTest(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
 {
     TShape_u t_shape;
@@ -223,7 +355,7 @@ int uTest(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
     std::cout << "    fullDirLength " << _fullDirLength(index) << std::endl; 
 
     indexCreate(index, FibreDir());
-    std::cout << "    getBucket start sysTime(): " << sysTime() - time<< std::endl;
+    std::cout << "    getBucket start sysTime(): " << sysTime() - time << std::endl;
     for(unsigned k = 0; k < length(genome); k++)
     {
         TIter it = begin(genome[k]);
@@ -238,6 +370,37 @@ int uTest(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
     }
     std::cout << "    sum = " << sum << " count = " << count << std::endl;
     std::cout << "    getBucket end sysTime(): "<< sysTime() - time<< std::endl;
+    std::cout << "    End uTest()" << std::endl;
+    return 0;
+}
+
+int uTest3(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
+{
+    TShape_u t_shape;
+    TIndex_u index(reads);
+    unsigned kmerLength = t_shape.span;
+    uint64_t sum=0, count=0, p = 0;
+    double time = sysTime();
+    std::cout << "uTest3():\n";
+    std::cout << "    fullDirLength " << _fullDirLength(index) << std::endl; 
+
+    indexCreate(index, FibreSADir());
+    std::cout << "    getSA start sysTime(): " << sysTime() - time<< std::endl;
+    for(unsigned k = 0; k < length(genome); k++)
+    {
+        TIter it = begin(genome[k]);
+        hashInit(t_shape, it);
+        for (uint64_t j = 0; j < length(genome[k]) - kmerLength + 1; j++)
+        //for (uint64_t j = 0; j < 100; j++)
+        {
+            hashNext(t_shape, it + j);
+            p = getBucket(index.bucketMap, t_shape.hValue);
+            for (uint64_t k = index.dir[p]; k < index.dir[p+1]; k++)
+                sum ^= index.sa[k].i2;
+        }
+    }
+    std::cout << "    sum = " << sum << " count = " << count << std::endl;
+    std::cout << "    getSA end sysTime(): "<< sysTime() - time<< std::endl;
     std::cout << "    End uTest()" << std::endl;
     return 0;
 }
@@ -300,8 +463,10 @@ int main(int argc, char** argv)
     readRecords(ids, genome, gFile);
     //std::cout << "read done sysTime " << sysTime() - time << std::endl;
     //umTest(reads, genome);
-    uTest(reads, genome);
+    //uTest(reads, genome);
     mTest1(reads, genome);
     //mTest2(reads, genome);
+    uTest3(reads, genome);
+    mTest3(reads, genome);
     return 0;
 }
