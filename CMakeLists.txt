@@ -88,6 +88,9 @@ add_executable(bench_hash hash.cpp)
 add_executable(bench_hash2 hash2.cpp)
 add_executable(bench_hash3 hash3.cpp)
 add_executable(bench_hash4 hash4.cpp)
+add_executable(bench_hash5 hash5.cpp)
+add_executable(bench_hash6 hash6.cpp)
+add_executable(bench_kmerAnalysis kmerAnalysis.cpp)
 add_executable(ctest1 test1.cpp)
 
 
@@ -104,6 +107,9 @@ target_link_libraries (bench_hash ${SEQAN_LIBRARIES})
 target_link_libraries (bench_hash2 ${SEQAN_LIBRARIES})
 target_link_libraries (bench_hash3 ${SEQAN_LIBRARIES})
 target_link_libraries (bench_hash4 ${SEQAN_LIBRARIES})
+target_link_libraries (bench_hash5 ${SEQAN_LIBRARIES})
+target_link_libraries (bench_hash6 ${SEQAN_LIBRARIES})
+target_link_libraries (bench_kmerAnalysis ${SEQAN_LIBRARIES})
 target_link_libraries (ctest1 ${SEQAN_LIBRARIES})
 
 

@@ -72,7 +72,7 @@ inline uint64_t _getAnchor_i2 (uint64_t & node)
 
 inline void _updateValue(uint64_t & value, uint64_t code)
 {
-    
+
 }
 
   inline uint64_t   _h1(uint64_t val)
@@ -90,23 +90,23 @@ inline void _updateValue(uint64_t & value, uint64_t code)
 
 inline uint64_t _requestAnchor(String<uint64_t> & anchor, uint64_t const & code, uint64_t const & mask /*length of anchor - 1*/)
 {
-    uint64_t k = 0, x = code & mask; 
+    uint64_t k = 0, x = code & mask;
     while((_getAnchor_i1(anchor[x]) ^code) & (_getAnchor_i1(anchor[x]) ^ _Anchor_Empty_))
     {
         x = (x + ++k) & mask;
     }
-    anchor[x] = (code << _AnchorBit_i1_) + ((anchor[x] + 1 ) & _AnchorMask_i1_); 
+    anchor[x] = (code << _AnchorBit_i1_) + ((anchor[x] + 1 ) & _AnchorMask_i1_);
     return x;
 }
 
 inline uint64_t _requestAnchor(uint64_t * anchor, uint64_t const & code, uint64_t const & mask /*length of anchor - 1*/)
 {
-    uint64_t k = 0, x = code & mask; 
+    uint64_t k = 0, x = code & mask;
     while((_getAnchor_i1(anchor[x]) ^code) & (_getAnchor_i1(anchor[x]) ^ _Anchor_Empty_))
     {
         x = (x + ++k) & mask;
     }
-    anchor[x] = (code << _AnchorBit_i1_) + ((anchor[x] + 1 ) & _AnchorMask_i1_); 
+    anchor[x] = (code << _AnchorBit_i1_) + ((anchor[x] + 1 ) & _AnchorMask_i1_);
     return x;
 //    while (true)
 //    {
@@ -117,7 +117,7 @@ inline uint64_t _requestAnchor(uint64_t * anchor, uint64_t const & code, uint64_
 //        }
 //        else if (_getAnchor_i1(anchor[x]) == _Anchor_Empty_)
 //        {
-//            anchor[x] = (code << _AnchorBit_i1_) + 1; 
+//            anchor[x] = (code << _AnchorBit_i1_) + 1;
 //            return x;
 //        }
 //        x = (x + ++k) & mask;
@@ -126,12 +126,12 @@ inline uint64_t _requestAnchor(uint64_t * anchor, uint64_t const & code, uint64_
 
 inline uint64_t _requestAnchor2(uint64_t * anchor, uint64_t const & code, uint64_t const & mask /*length of anchor - 1*/)
 {
-    uint64_t k = 0, x = code & mask; 
+    uint64_t k = 0, x = code & mask;
     while((_getAnchor_i1(anchor[x]) ^code) & (_getAnchor_i1(anchor[x]) ^ _Anchor_Empty_))
     {
         x = (x + ++k) & mask;
     }
-    anchor[x] = (code << _AnchorBit_i1_) + ((anchor[x] + 1 ) & _AnchorMask_i1_); 
+    anchor[x] = (code << _AnchorBit_i1_) + ((anchor[x] + 1 ) & _AnchorMask_i1_);
     return x;
 }
 
@@ -156,12 +156,331 @@ inline uint64_t _getAnchor(uint64_t * anchor, uint64_t const & code, uint64_t co
     return x;
 }
 
+void opKmerAnalysis5(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
+{
+
+    TShape shape;
+    TIndex_u index(genome);
+    uint64_t mask  = 131072 - 1, dn, count=0, sum = 0;
+    uint64_t anchor[mask + 1];
+    double time;
+    std::cout << "opAnalysis4() \n";
+
+    //createQGramIndexDirOnly(index);
+    indexCreate(index, FibreSADir());
+    _initAnchor(anchor, mask);
+    time = sysTime();
+    for (uint64_t j = 0; j < length(reads); j++)
+    //for (uint64_t j = 0; j < 3000; j++)
+    //for (uint64_t j = 27; j< 28; j++)
+    {
+        TIter it = begin(reads[j]);
+        hashInit(shape, it);
+        for (uint64_t h = 0; h < length(anchor); h++)
+            anchor[h] = 0;
+        uint64_t x = 1;
+        sum=0;
+        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++)
+        {
+            hashNext(shape, it + k);
+            dn = getBucket(index.bucketMap, shape.hValue);
+            uint64_t pre = ~0;
+            if(index.dir[dn+1] - index.dir[dn] < 32)
+            {
+                sum += index.dir[dn+1] - index.dir[dn];
+                for (uint64_t n = index.dir[dn]; n < index.dir[dn + 1]; n++)
+                {
+                    if (index.sa[n].i2 - pre > 1000)
+                    {
+                        anchor[x++] = ((index.sa[n].i2- k) << 20) + k;
+                        pre = index.sa[n].i2;
+                    //sum ^= (_getSA_i2(index.sa[n]) - k) >> 9;
+                    //if ((index.sa[n].i2 - k) >>9==298768 && j==13)
+                    //if(j==2 && index.dir[dn+1]-index.dir[dn] < 32)
+                    //if(j== 395)
+                    //    std::cout << shape.hValue << " " << k << " " << index.sa[n].i2 << std::endl;
+
+                    }
+                }
+            }
+        }
+        anchor[0] = anchor[1];
+        uint64_t max1 = 0, max2 = 0, k1 = 0, k2 =0, countk = 0, max=0, c_b=0,
+        start=0, ak=anchor[0], cbb=0, cbs=0, mask_cb = (1<<20) - 1,
+        sb=0;
+        //for (uint64_t k = 0; k < length(anchor); k++)
+        std::sort(begin(anchor), begin(anchor) + x);
+
+        //std::cout << std::endl << j << " ";
+        
+        for (uint64_t k = 1; k <= x; k++)
+        {
+            //if ( j==541||j == 941||j==614||j==691||j==696||j==1253)
+            if (j==691)
+            {
+               std::cout << j<< " " << k << " " << (anchor[k]>>20) << " " << (anchor[k] & mask_cb) << std::endl;
+            }
+            //   << std::endl;
+            //if (j == 541)
+            //    std::cout << anchor[k] << " " << x << " " << ak << std::endl;
+            //std::cout << anchor[k] << " ";
+            if (anchor[k]-ak < (1000<<20))
+            {
+                cbb++;
+                //if(k>1)
+                        }
+            else
+            {
+                std::sort(begin(anchor)+sb, begin(anchor)+k, 
+                [&mask_cb](uint64_t &a, uint64_t &b){return (a & mask_cb) < (b & mask_cb);});
+                for (uint64_t m = sb+1; m < k; m++)
+                {
+                    if(((anchor[m]-anchor[m-1]) & mask_cb) > shapelength) 
+                        c_b += shapelength;
+                    else
+                    {
+                        c_b += (anchor[m] - anchor[m-1]) & mask_cb; 
+                        //std::cout << ((anchor[m]-anchor[m-1]) & mask_cb) << std::endl;
+                    }
+                }
+                //if (j==541)
+                //    std::cout << (anchor[k-1] >> 20) << " " << c_b << std::endl;
+                //sort(begin(anchor)+sb, begin(anchor)+k);
+                //cbs = (anchor[k-1] - anchor[sb]) & mask_cb;
+                //c_b = cbb * (cbs+1);
+                //if(j==9)
+                //std::cout <<  c_b << " " << cbb << " " << cbs << " " << sb <<
+                //" " <<(anchor[k-1] & mask_cb)<< " "
+                //<< (anchor[sb] & mask_cb) << std::endl;
+                if (c_b > max)
+                {
+                    max = c_b;
+                    start = sb;
+                }
+                sb = k;
+                ak = anchor[k];
+                cbb = 1;
+                c_b = shapelength;
+                cbs=0;
+            }
+
+        }
+        //if (j < 100)
+            //std::cout << " " << j << " " << length(reads[j]) << " " << (anchor[start] >> 20) << " " << (k1 << 10) << " " << max1 << " " << k2 << " " << max2 << " " << countk / (float)length(anchor) << " " << sum << " " << (float)sum / length(reads[j]) << " " << anchor[start] << " " << start << std::endl;
+        //std:: cout << k << " " << (anchor[k] & _AnchorMask_i1_) << std::endl; //<< " " << std::bitset<64>(anchor[k]) << std::endl;
+        //std::cout << j << " " << std::endl;
+        sum ^= max1;
+        if (max1 == 0)
+            count++;
+
+    }
+    std::cout << "    count % = " << (float)count  << " " << length(reads) << " " << (float)count / length(reads) << std::endl;
+    std::cout << "    anchor[0] = " << anchor[0] << std::endl;
+    std::cout << "    End mnKmerAnalysis() systime() = " << sysTime() - time << std::endl;
+}
+
+
+
+void opKmerAnalysis4(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
+{
+
+    TShape shape;
+    TIndex_u index(genome);
+    uint64_t mask  = 131072 - 1, dn, count=0, sum = 0;
+    uint64_t anchor[mask + 1];
+    double time = sysTime();
+    std::cout << "opAnalysis4() \n";
+
+    //createQGramIndexDirOnly(index);
+    indexCreate(index, FibreSADir());
+    _initAnchor(anchor, mask);
+    for (uint64_t j = 0; j < length(reads); j++)
+    //for (uint64_t j = 0; j < 3000; j++)
+    //for (uint64_t j = 27; j< 28; j++)
+    {
+        TIter it = begin(reads[j]);
+        hashInit(shape, it);
+        for (uint64_t h = 0; h < length(anchor); h++)
+            anchor[h] = 0;
+        uint64_t x = 1;
+        sum=0;
+        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++)
+        {
+            hashNext(shape, it + k);
+            dn = getBucket(index.bucketMap, shape.hValue);
+            uint64_t pre = ~0;
+            if(index.dir[dn+1] - index.dir[dn] < 32)
+            {
+                sum += index.dir[dn+1] - index.dir[dn];
+                for (uint64_t n = index.dir[dn]; n < index.dir[dn + 1]; n++)
+                {
+                    if (index.sa[n].i2 - pre > 1000)
+                    {
+                        anchor[x++] = ((index.sa[n].i2- k) << 20) + k;
+                        pre = index.sa[n].i2;
+                    //sum ^= (_getSA_i2(index.sa[n]) - k) >> 9;
+                    //if ((index.sa[n].i2 - k) >>9==298768 && j==13)
+                    //if(j==2 && index.dir[dn+1]-index.dir[dn] < 32)
+                    //if(j== 395)
+                    //    std::cout << shape.hValue << " " << k << " " << index.sa[n].i2 << std::endl;
+
+                    }
+                }
+            }
+        }
+        anchor[0] = anchor[1];
+        uint64_t max1 = 0, max2 = 0, k1 = 0, k2 =0, countk = 0, max=0, c_b=0,
+        start=0, ak=anchor[0], cbb=0, cbs=0, mask_cb = (1<<20) - 1,
+        sb=0;
+        //for (uint64_t k = 0; k < length(anchor); k++)
+        std::sort(begin(anchor), begin(anchor) + x);
+
+        //std::cout << std::endl << j << " ";
+        for (uint64_t k = 1; k <= x; k++)
+        {
+            //if (j == 9)
+            //   std::cout << k << " " << (anchor[k]>>20) << " " <<
+            //   (anchor[k] & mask_cb)  << " " << start <<  " " << cbb << " "
+            //   << std::endl;
+            //if (j == 230919)
+            //    std::cout << anchor[k] << " " << x << " " << ak << std::endl;
+            //std::cout << anchor[k] << " ";
+            if (anchor[k]-ak < (1000<<20))
+            {
+                cbb++;
+                //if(k>1)
+                        }
+            else
+            {
+                std::sort(begin(anchor)+sb, begin(anchor)+k, 
+                [&mask_cb](uint64_t &a, uint64_t &b){return (a & mask_cb) < (b & mask_cb);});
+                //sort(begin(anchor)+sb, begin(anchor)+k);
+                cbs = (anchor[k-1] - anchor[sb]) & mask_cb;
+                c_b = cbb * (cbs+1);
+                //if(j==9)
+                //std::cout <<  c_b << " " << cbb << " " << cbs << " " << sb <<
+                //" " <<(anchor[k-1] & mask_cb)<< " "
+                //<< (anchor[sb] & mask_cb) << std::endl;
+                if (c_b > max)
+                {
+                    max = c_b;
+                    start = sb;
+                }
+                sb = k;
+                ak = anchor[k];
+                cbb = 1;
+                c_b = 1;
+                cbs=0;
+            }
+
+        }
+        //if (j < 100)
+            std::cout << " " << j << " " << length(reads[j]) << " " << (anchor[start] >> 20) << " " << (k1 << 10) << " " << max1 << " " << k2 << " " << max2 << " " << countk / (float)length(anchor) << " " << sum << " " << (float)sum / length(reads[j]) << " " << anchor[start] << " " << start << std::endl;
+        //std:: cout << k << " " << (anchor[k] & _AnchorMask_i1_) << std::endl; //<< " " << std::bitset<64>(anchor[k]) << std::endl;
+        //std::cout << j << " " << std::endl;
+        sum ^= max1;
+        if (max1 == 0)
+            count++;
+
+    }
+    std::cout << "    count % = " << (float)count  << " " << length(reads) << " " << (float)count / length(reads) << std::endl;
+    std::cout << "    anchor[0] = " << anchor[0] << std::endl;
+    std::cout << "    End mnKmerAnalysis() systime() = " << sysTime() - time << std::endl;
+}
+
+
+
+void opKmerAnalysis3(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
+{
+
+    TShape shape;
+    TIndex_u index(genome);
+    uint64_t mask  = 131072 - 1, dn, count=0, sum = 0;
+    uint64_t anchor[mask + 1];
+    double time = sysTime();
+    std::cout << "opAnalysis3() \n";
+
+    //createQGramIndexDirOnly(index);
+    indexCreate(index, FibreSADir());
+    _initAnchor(anchor, mask);
+    for (uint64_t j = 0; j < length(reads); j++)
+    //for (uint64_t j = 0; j < 3000; j++)
+    //for (uint64_t j = 27; j< 28; j++)
+    {
+        TIter it = begin(reads[j]);
+        hashInit(shape, it);
+        for (uint64_t h = 0; h < length(anchor); h++)
+            anchor[h] = 0;
+        uint64_t x = 0;
+        sum=0;
+        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++)
+        {
+            hashNext(shape, it + k);
+            dn = getBucket(index.bucketMap, shape.hValue);
+            uint64_t pre = ~0;
+            //if(index.dir[dn+1] - index.dir[dn] < 32)
+            //{
+                sum += index.dir[dn+1] - index.dir[dn];
+                for (uint64_t n = index.dir[dn]; n < index.dir[dn + 1]; n++)
+                {
+                    if (index.sa[n].i2 - pre > 1000)
+                    {
+                        anchor[x++] = index.sa[n].i2- k;
+                        pre = index.sa[n].i2;
+                    //sum ^= (_getSA_i2(index.sa[n]) - k) >> 9;
+                    //if ((index.sa[n].i2 - k) >>9==298768 && j==13)
+                    //if(j==2 && index.dir[dn+1]-index.dir[dn] < 32)
+                    //if(j== 395)
+                    //    std::cout << shape.hValue << " " << k << " " << index.sa[n].i2 << std::endl;
+
+                    }
+                }
+            //}
+        }
+        uint64_t max1 = 0, max2 = 0, k1 = 0, k2 =0, countk = 0, max=0, c_b=0, start=0, ak=anchor[0];
+        //for (uint64_t k = 0; k < length(anchor); k++)
+        std::sort(begin(anchor), begin(anchor) + x);
+
+        //std::cout << std::endl << j << " ";
+        for (uint64_t k = 0; k <= x; k++)
+        {
+            //if (j == 230919)
+            //    std::cout << anchor[k] << " " << x << " " << ak << std::endl;
+            //std::cout << anchor[k] << " ";
+            if (anchor[k]-ak < 1000)
+                c_b++;
+            else
+            {
+                if (c_b > max)
+                {
+                    max = c_b;
+                    start = k - c_b;
+                }
+                ak = anchor[k];
+                c_b = 1;
+            }
+
+        }
+        //if (j < 100)
+            std::cout << " " << j << " " << length(reads[j]) << " " << anchor[start] << " " << (k1 << 10) << " " << max1 << " " << k2 << " " << max2 << " " << countk / (float)length(anchor) << " " << sum << " " << (float)sum / length(reads[j]) << " " << anchor[start] << " " << start << std::endl;
+        //std:: cout << k << " " << (anchor[k] & _AnchorMask_i1_) << std::endl; //<< " " << std::bitset<64>(anchor[k]) << std::endl;
+        //std::cout << j << " " << std::endl;
+        sum ^= max1;
+        if (max1 == 0)
+            count++;
+
+    }
+    std::cout << "    count % = " << (float)count  << " " << length(reads) << " " << (float)count / length(reads) << std::endl;
+    std::cout << "    anchor[0] = " << anchor[0] << std::endl;
+    std::cout << "    End mnKmerAnalysis() systime() = " << sysTime() - time << std::endl;
+}
+
 
 
 void opKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
 {
-    
-    TShape shape; 
+
+    TShape shape;
     TIndex_u index(genome);
     uint64_t mask  = 131072 - 1, dn, count=0, sum = 0;
     uint64_t anchor[mask + 1];
@@ -171,36 +490,41 @@ void opKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads
     //createQGramIndexDirOnly(index);
     indexCreate(index, FibreSADir());
     _initAnchor(anchor, mask);
-    for (uint64_t j = 0; j < length(reads); j++)  
+    for (uint64_t j = 0; j < length(reads); j++)
     //for (uint64_t j = 0; j < 3000; j++)
     //for (uint64_t j = 27; j< 28; j++)
     {
         TIter it = begin(reads[j]);
         hashInit(shape, it);
-        _initAnchor(anchor, mask); 
-        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++) 
+        _initAnchor(anchor, mask);
+        sum=0;
+        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++)
         {
             hashNext(shape, it + k);
-            dn = getBucket(index.bucketMap, shape.hValue); 
-            uint64_t pre = ~0; 
-            for (uint64_t n = index.dir[dn]; n < index.dir[dn + 1]; n++)
+            dn = getBucket(index.bucketMap, shape.hValue);
+            uint64_t pre = ~0;
+            if(index.dir[dn+1] - index.dir[dn] < 32)
             {
-                if (index.sa[n].i2 - pre > 100)
+                sum += index.dir[dn+1] - index.dir[dn];
+                for (uint64_t n = index.dir[dn]; n < index.dir[dn + 1]; n++)
                 {
-                    uint64_t x=_requestAnchor(anchor, (index.sa[n].i2 - k) >> 9, mask);
-                    pre = index.sa[n].i2;
-                //sum ^= (_getSA_i2(index.sa[n]) - k) >> 9;
-                //if ((index.sa[n].i2 - k) >>9==298768 && j==13)
-                //if(j==2 && index.dir[dn+1]-index.dir[dn] < 32)
-                if(j== 9)
-                    std::cout << shape.hValue << " " << k << " " << index.sa[n].i2<< std::endl;
-                
+                    if (index.sa[n].i2 - pre > 100)
+                    {
+                        uint64_t x=_requestAnchor(anchor, (index.sa[n].i2 - k) >> 10, mask);
+                        pre = index.sa[n].i2;
+                    //sum ^= (_getSA_i2(index.sa[n]) - k) >> 9;
+                    //if ((index.sa[n].i2 - k) >>9==298768 && j==13)
+                    //if(j==2 && index.dir[dn+1]-index.dir[dn] < 32)
+                    //if(j== 91)
+                    //    std::cout << shape.hValue << " " << k << " " << index.sa[n].i2<< std::endl;
+
+                    }
                 }
             }
         }
         uint64_t max1 = 0, max2 = 0, k1 = 0, k2 =0, countk = 0;
         //for (uint64_t k = 0; k < length(anchor); k++)
-        for (uint64_t k = 0; k < mask + 1; k++) 
+        for (uint64_t k = 0; k < mask + 1; k++)
         {
             if (anchor[k] != _Anchor_Empty_)
             {
@@ -219,17 +543,17 @@ void opKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads
 
                 //anchor[k] = _Anchor_Empty_;
             }
-            //else 
+            //else
             //    countk++;
         }
         //if (j < 100)
-        //std::cout << " " << j << " " << length(reads[j]) << " " << (k1 << 9) << " " << max1 << " " << k2 << " " << max2 << " " << countk / (float)length(anchor) << std::endl;
+        std::cout << " " << j << " " << length(reads[j]) << " " << (k1 << 10) << " " << max1 << " " << k2 << " " << max2 << " " << countk / (float)length(anchor) << " " << sum << " " << (float)sum / length(reads[j]) << std::endl;
         //std:: cout << k << " " << (anchor[k] & _AnchorMask_i1_) << std::endl; //<< " " << std::bitset<64>(anchor[k]) << std::endl;
         //std::cout << j << " " << std::endl;
         sum ^= max1;
         if (max1 == 0)
             count++;
-        
+
     }
     std::cout << "    count % = " << (float)count  << " " << length(reads) << " " << (float)count / length(reads) << std::endl;
     std::cout << "    anchor[0] = " << anchor[0] << std::endl;
@@ -249,18 +573,18 @@ int opKmerAnalysis(TIndex_u & index, StringSet<DnaString> & genome)
     //resize(count, length(index) >> step);
     resize(anchor, lengthSum(index.sa));
     resize(anchor1, length(index.sa));
-    for (uint64_t j = 0; j < length(genome); j++) 
+    for (uint64_t j = 0; j < length(genome); j++)
     {
-        
+
         std::cout << length(genome[j]) << " ";
-         
+
         for(uint64_t k = 0; k < length(count); k++)
         {
             count[k] = 0;
             //anchor[k] = 0;
         }
         //std::cout << "> " << j + 1 << length(genome[j]);
-        
+
         for (uint64_t k = 0; k < length(anchor); k++)
             anchor[k] = 0;
         for (uint64_t k = 0; k < length(anchor1); k++)
@@ -291,7 +615,7 @@ int opKmerAnalysis(TIndex_u & index, StringSet<DnaString> & genome)
                 anchor1[(index.sa[n].i2 - k)/100].i2 = k;
                 uint64_t l = anchor1[(index.sa[n].i2 - k)/100].i2 - anchor1[(index.sa[n].i2 - k)/100].i1;
                 if (l > 100)
-                { 
+                {
                     std::cout << j << " anchor1 " << k << " " << (index.sa[n].i2 - k)/100 << " " << l << std::endl;
                     flag = 1;
                     break;
@@ -303,7 +627,7 @@ int opKmerAnalysis(TIndex_u & index, StringSet<DnaString> & genome)
         //uint64_t max = 0;
         //unsigned K = 0;
         //for (uint64_t k = 0; k < length(count); k++)
-        //    if(count[k] != 0) 
+        //    if(count[k] != 0)
         //    {
         //        //std::cout << k << " " << count[k] << std::endl;
         //        if(max < count[k])
@@ -323,7 +647,7 @@ void _detectAnchor(TIndex_u & index, StringSet<DnaString> genome)
     TShape_u shape;
     String<Pair<uint64_t, uint64_t> > anchor;
     uint64_t dir=0;
-    for (uint64_t j = 0; j < length(genome); j++) 
+    for (uint64_t j = 0; j < length(genome); j++)
     {
         resize(count, length(index.text)/length(genome[j])+1, 0);
         TIter it=begin(genome[j]);
@@ -334,7 +658,7 @@ void _detectAnchor(TIndex_u & index, StringSet<DnaString> genome)
             dir = getBucket(index.bucketMap, shape.hValue);
             for (uint64_t n = index.dir[dir]; n < index.dir[dir + 1] ; n++)
             {
-                anchor[index.sa[n]] 
+                anchor[index.sa[n]]
             }
         }
     }
@@ -343,8 +667,8 @@ void _detectAnchor(TIndex_u & index, StringSet<DnaString> genome)
 
 void mnKmerAnalysis(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
 {
-    
-    TShape shape; 
+
+    TShape shape;
     TIndex index(genome);
     String<uint64_t> anchor;
     uint64_t mask  = 131072 - 1, dn, count=0, sum = 0;
@@ -355,20 +679,20 @@ void mnKmerAnalysis(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
     //resize(anchor, lengthSum(genome));
     createQGramIndexDirOnly(index);
     _initAnchor(anchor, mask);
-    //for (uint64_t j = 0; j < length(reads); j++)  
+    //for (uint64_t j = 0; j < length(reads); j++)
     for (uint64_t j = 0; j < 10000; j++)
     //for (uint64_t j = 27; j< 28; j++)
     {
         TIter it = begin(reads[j]);
         hashInit(shape, it);
-        
+
         //_initAnchor(anchor, mask);
         //_initAnchor(anchor);
-        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++) 
+        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++)
         {
             hashNext(shape, it + k);
-            dn = getDir(index, shape); 
-            
+            dn = getDir(index, shape);
+
             for (uint64_t n = _getBodyCounth(index.dir[dn]); n < _getBodyCounth(index.dir[dn + 1]); n++)
             {
                 _requestAnchor(anchor, (_getSA_i2(index.sa[n]) - k) >> 9, mask);
@@ -390,7 +714,7 @@ void mnKmerAnalysis(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
                 }
                 anchor[k] = _Anchor_Empty_;
             }
-            //else 
+            //else
             //    countk++;
         }
             //else if(max2 < (anchor[k] & _AnchorMask_i1_))
@@ -406,7 +730,7 @@ void mnKmerAnalysis(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
         sum ^= max1;
         if (max1 == 0)
             count++;
-        
+
     }
     std::cout << "    count % = " << (float)count  << " " << length(reads) << " " << (float)count / length(reads) << std::endl;
     std::cout << "    anchor[0] = " << anchor[0] << std::endl;
@@ -415,8 +739,8 @@ void mnKmerAnalysis(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
 
 void mnKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads)
 {
-    
-    TShape shape; 
+
+    TShape shape;
     TIndex index(genome);
     uint64_t mask  = 131072 - 1, dn, count=0, sum = 0;
     uint64_t anchor[mask + 1];
@@ -425,18 +749,18 @@ void mnKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads
 
     createQGramIndexDirOnly(index);
     _initAnchor(anchor, mask);
-    for (uint64_t j = 0; j < length(reads); j++)  
+    for (uint64_t j = 0; j < length(reads); j++)
     //for (uint64_t j = 0; j < 3000; j++)
     //for (uint64_t j = 27; j< 28; j++)
     {
         TIter it = begin(reads[j]);
         hashInit(shape, it);
-        _initAnchor(anchor, mask); 
-        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++) 
+        _initAnchor(anchor, mask);
+        for (uint64_t k = 0; k < (length(reads[j]) - shape.span + 1); k++)
         {
             hashNext(shape, it + k);
-            dn = getDir(index, shape); 
-            
+            dn = getDir(index, shape);
+
             for (uint64_t n = _getBodyCounth(index.dir[dn]); n < _getBodyCounth(index.dir[dn + 1]); n++)
             {
                 uint64_t x=_requestAnchor(anchor, (_getSA_i2(index.sa[n]) - k) >> 9, mask);
@@ -447,7 +771,7 @@ void mnKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads
         }
         uint64_t max1 = 0, max2 = 0, k1 = 0, k2 =0, countk = 0;
         //for (uint64_t k = 0; k < length(anchor); k++)
-        for (uint64_t k = 0; k < mask + 1; k++) 
+        for (uint64_t k = 0; k < mask + 1; k++)
         {
             if (anchor[k] != _Anchor_Empty_)
             {
@@ -466,7 +790,7 @@ void mnKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads
 
                 //anchor[k] = _Anchor_Empty_;
             }
-            //else 
+            //else
             //    countk++;
         }
         if (j < 100)
@@ -476,7 +800,7 @@ void mnKmerAnalysis2(StringSet<DnaString> & genome, StringSet<DnaString> & reads
         sum ^= max1;
         if (max1 == 0)
             count++;
-        
+
     }
     std::cout << "    count % = " << (float)count  << " " << length(reads) << " " << (float)count / length(reads) << std::endl;
     std::cout << "    anchor[0] = " << anchor[0] << std::endl;
@@ -501,8 +825,11 @@ int main(int argc, char** argv)
     //indexCreate(index_u, FibreSADir());
     //std::cout << sysTime() - time << std::endl;
     //opKmerAnalysis(index_u, genome);
-    opKmerAnalysis2(genome, reads);
+    //opKmerAnalysis2(genome, reads);
+    //opKmerAnalysis3(genome, reads);
+    //opKmerAnalysis4(genome, reads);
+    opKmerAnalysis5(genome, reads);
     //mnKmerAnalysis(genome, reads);
     //mnKmerAnalysis2(genome, reads);
     return 0;
-} 
+}

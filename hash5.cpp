@@ -12,8 +12,8 @@
 
 using namespace seqan;
 
-const unsigned shapelength = 30;
-const unsigned shapeweight = 23;
+const unsigned shapelength = 25;
+const unsigned shapeweight = 18;
 const unsigned blocklimit = 32;
 
 typedef Iterator<String<Dna> >::Type TIter;
@@ -26,343 +26,7 @@ typedef Index<StringSet<DnaString>, IndexQGram<UngappedShape<shapelength>, OpenA
 typedef Index<StringSet<DnaString>, IndexQGram<SimpleMShape, OpenAddressing > > TMIndex;
 
 typedef Value<TShape>::Type HValue;
-
-void _setSANode(uint64_t & node, uint64_t const & k, uint64_t const & j)
-{
-    node = k << _bitSANum + j;
-}
-
-template <unsigned TSpan, unsigned TWeight>
-void _qgramClearDir(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan, TWeight>, OpenAddressing> > & index)
-{
-    typedef Shape<Dna, MinimizerShape<TSpan, TWeight> > TM_Shape;
-    typedef typename Value<TM_Shape>::Type HValue;
-    resize (indexDir(index), _fullDirLength(index) + lengthSum(indexText(index)) + 2);
-    index.start = _fullDirLength(index);
-    index._Empty_Dir_ = 0;
-    for (HValue k = 0; k < length(index.dir); k++) 
-    {
-        index.dir[k] = _bitEmpty;
-    }
-    std::cout << "        _qgramClearDir():" << std::endl;
-    std::cout << "            _fullDirLength(index) = " << _fullDirLength(index) << std::endl;
-    std::cout << "            lengh(index.dir) = " << length(index.dir) << std::endl;
-    std::cout << "            End _qgramClearDir()" << std::endl;
-}
-
-template <typename HValue>
-inline void _compress(HValue & k, HValue &j, HValue &YValue)
-{
-   YValue += (k << 36) + (j << 18);
-}
-
-template <unsigned TSpan, unsigned TWeight>
-void _qgramCountQGrams(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan, TWeight>, OpenAddressing > > & index)
-{
-    typedef Shape<Dna, MinimizerShape<TSpan, TWeight> > TM_Shape;
-    typedef typename Value<TM_Shape>::Type HValue;
-    typedef std::tuple<HValue, HValue, HValue, HValue, HValue> HTuple;
-    typedef String<HTuple> Stringtuple;
-
-    TM_Shape shape;
-    Stringtuple hs, hs1;
-    HValue  m = 0, sum = 0;
-
-    std::vector<uint64_t> hs2;
-
-    double time = sysTime();
-    resize(hs, lengthSum(indexText(index)) - length(indexText(index)) * (shape.span - 1) + 1);
-
-    std::cout << "        _qgramCountQGrams() sysTime(): " << sysTime() - time << std::endl;
-    std::cout << "            lengthSum(StringSet) = " << lengthSum(indexText(index)) << std::endl;
-    for(HValue k = 0; k < length(indexText(index)); k++)
-    {
-        TIter it = begin(indexText(index)[k]);
-        hashInit(shape, it);
-        for (HValue j = 0; j < length(indexText(index)[k]) - shape.span + 1; j++)
-        {
-            hashNext(shape, it + j);
-            hs[m++] = std::make_tuple(shape.XValue, shape.hValue, shape.YValue, k, j);
-            //hs[m++] = std::Pair(shape.XValue, _compress(k, j, shape.YValue));
-        }
-    }
-    std::cout << "            make_tuple sysTime(): " << sysTime() - time << std::endl;
-    hs[length(hs) - 1] = std::make_tuple((HValue)0, (HValue)0, (HValue)0, (HValue)1, (HValue)1);
-    std::sort(begin(hs), end(hs),
-        [](const HTuple &a, const HTuple &b)
-        {return (std::get<0>(a) > std::get<0>(b)||(std::get<0>(a) == std::get<0>(b) && std::get<1>(a) > std::get<1>(b)));});
-    hs[length(hs) - 1] = std::make_tuple((HValue)1, (HValue)1, (HValue)0, (HValue)1, (HValue)1);
-    
-    std::cout << "            sort sysTime(): " << sysTime() - time << std::endl;
-    HValue countx = 1, counth = 1, tmp = 0, countdh = 0, countb = 1, hk = 0;
-    resize(index.sa, length(hs));
-    for (HValue k = 1; k < length(hs); k++)
-    {
-        //std::cout << k << std::endl;
-        index.sa[k] = (std::get<0>(hs[k]) << 40)  + std::get<4>(hs[k]);
-        if (std::get<1>(hs[k]) != std::get<1>(hs[k - 1]))
-        { _setBodyNode(index.dir[index.start + hk], std::get<2>(hs[k-1]), _BodyType_code, tmp);
-            //std::cout << counth << std::endl;
-            hk++;
-            countb++;
-            countdh++;
-            tmp = counth;
-        }
-        //else
-        counth++;
-
-        if (std::get<0>(hs[k]) != std::get<0>(hs[k - 1]))
-        {
-            if (countb < blocklimit)
-            {
-                requestDir(index.dir, index.start, _makeHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(index.start + hk - countb));
-                for (HValue j = 0; j < countb; j++)
-                    _setBodyType_Begin(index.dir[index.start + hk - countb]);
-            }
-            else
-            {
-                hk -= countb;
-                requestDir(index.dir, index.start, _makeVtlHeadNode(std::get<0>(hs[k-1])), _makeEmptyNode(index.start + hk));
-                for (HValue j = k - countx; j < k; j++)
-                    if (std::get<1>(hs[j]) != std::get<1>(hs[j + 1]))
-                    {
-                        requestDir(index.dir, index.start, _makeHVlHeadNode(std::get<1>(hs[j])), _makeEmptyNode(index.start+hk));
-                        _setBodyType_Begin(index.dir[index.start + hk]);
-                        hk++;
-                    }
-            }
-            countb = 0;
-            countx = 1;
-        }
-        else
-        {
-            countx++;
-        }
-    }
-
-    std::cout << counth << std::endl;
-    resize(index.dir, index.start + countdh + 10);
-    _setBodyNode(index.dir[index.start + countdh], _bitEmpty, _BodyType_code, counth - 1); 
-    _setBodyType_Begin(index.dir[index.start + countdh]);
-    index._Empty_Dir_ = index.start + countdh + 1;
-    std::cout << "            End _qgramCountQGrams() sysTime(): " << sysTime() - time << std::endl;
-}
-
-template <unsigned TSpan, unsigned TWeight>
-void createQGramIndexDirOnly(Index<StringSet<DnaString>, IndexQGram<MinimizerShape<TSpan, TWeight>, OpenAddressing > >& index)
-{
-    double time = sysTime(); 
-    std::cout << "    createQGramIndexDirOnly() sysTime(): " << sysTime() - time << std::endl;
-    _qgramClearDir(index);
-    _qgramCountQGrams(index);
-    std::cout << "        index.dir[index._Empty_Dir_] = " << index.dir[index._Empty_Dir_] << std::endl << "        length(index.dir) = " << length(index.dir) << std::endl;
-    std::cout << "        End createQGramIndexDirOnly() sysTime(): " << sysTime() - time << std::endl;
-}
-
-int mTest1(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
-{
-    TShape shape;
-    TIndex index(reads);
-    uint64_t sum = 0, p = 0;
-    double time = sysTime();
-    std::cout << "mTest1(): " << "    start " << time << std::endl;
-    createQGramIndexDirOnly(index);
-    std::cout << "    lenght Dir = " << length(index.dir) << " length Text = " << lengthSum(indexText(index)) << std::endl;
-    std::cout << "    getDir start sysTime(): " << sysTime() - time << std::endl;
-    for(uint64_t k = 0; k < length(genome); k++)
-    {
-        TIter it = begin(genome[k]);
-        hashInit(shape, it);
-        for (uint64_t j = 0; j < length(genome[k]) - shape.span + 1; j++)
-        //for (uint64_t j = 0; j < 100; j++) 
-        {
-            hashNext(shape, it + j);
-            p = getDir(index, shape);
-            sum += index.dir[p + 1] - index.dir[p];
-        }
-    }
-    sum=_getBodyCounth(sum);
-    std::cout << "    sum = " << sum << std::endl;
-    std::cout << "    getDir end sysTime(): " << sysTime() - time << std::endl;
-    std::cout << "    End mTest1()" << std::endl;
-
-    return 0;
-}
-
-int mTest2(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
-{
-    TShape shape;
-    TIndex index(reads);
-    
-    uint64_t sum = 0;
-    double time = sysTime();
-    std::cout << "mTest2(): " << std::endl;
-    for (unsigned j = 24; j < 31; j++)
-    for (unsigned k = 22; k < 23; k++)
-    {
-        std::cout << j << " " << k << std::endl;
-        //resize(shape, 30, k);
-        //resize(index.shape, 30, k);
-        shape.span=j;
-        shape.weight=k;
-        index.shape.weight=k;
-        index.shape.span=j;
-        createQGramIndexDirOnly(index);
-        std::cout << "    lenght Dir = " << length(index.dir) << " length Text = " << lengthSum(indexText(index)) << std::endl;
-        std::cout << "    getDir start sysTime(): " << sysTime() - time << std::endl;
-        for(uint64_t k = 0; k < length(genome); k++)
-        {
-            TIter it = begin(genome[k]);
-            hashInit(shape, it);
-            for (uint64_t j = 0; j < length(genome[k]) - shape.span + 1; j++)
-            {
-                hashNext(shape, it + j);
-                sum = index.dir[getDir(index, shape)];
-            }
-        }
-        sum=_getBodyCounth(sum);
-        std::cout << "    sum = " << sum << std::endl;
-        std::cout << "    getDir end sysTime(): " << sysTime() - time << std::endl;
-        std::cout << "    End mTest1()" << std::endl;
-    } 
-
-    return 0;
-}
-
-int uTest(StringSet<DnaString> & reads, StringSet<DnaString> & genome)
-{
-    TShape_u t_shape;
-    TIndex_u index(reads);
-    unsigned kmerLength = t_shape.span;
-    uint64_t sum=0, count=0, p = 0;
-    double time = sysTime();
-    std::cout << "uTest():\n" << "    start " << time << std::endl;
-    std::cout << "    fullDirLength " << _fullDirLength(index) << std::endl; 
-
-    indexCreate(index, FibreDir());
-    std::cout << "    getBucket start sysTime(): " << sysTime() - time<< std::endl;
-    for(unsigned k = 0; k < length(genome); k++)
-    {
-        TIter it = begin(genome[k]);
-        hashInit(t_shape, it);
-        for (uint64_t j = 0; j < length(genome[k]) - kmerLength + 1; j++)
-        //for (uint64_t j = 0; j < 100; j++)
-        {
-            hashNext(t_shape, it + j);
-            p = getBucket(index.bucketMap, t_shape.hValue);
-            sum += index.dir[p + 1] - index.dir[p];
-        }
-    }
-    std::cout << "    sum = " << sum << " count = " << count << std::endl;
-    std::cout << "    getBucket end sysTime(): "<< sysTime() - time<< std::endl;
-    std::cout << "    End uTest()" << std::endl;
-    return 0;
-}
-
-int umTest(StringSet<DnaString> & reads,  StringSet<DnaString> & genome)
-{
-    
-    std::cout << "umTest()" << std::endl;
-    TShape_u t_shape;
-    TIndex_u index(reads);
-    unsigned kmerLength = t_shape.span;
-    uint64_t s=0, sum=0;
-   
-    TShape shape;
-    TIndex index1(reads);
-    
-    indexCreate(index, FibreDir());
-    createQGramIndexDirOnly(index1);
-
-    std::cout << "    h2y(shape, BucketMap<uint64_t>::EMPTY) = " << h2y(shape, BucketMap<uint64_t>::EMPTY) << std::endl;
-    uint64_t v1, v2, p1, p2;
-    for(unsigned k = 0; k < length(genome); k++)
-    {
-        TIter it = begin(genome[k]);
-        hashInit(t_shape, it);
-        hashInit(shape, it);
-        for (uint64_t j = 0; j < length(genome[k]) - kmerLength + 1; j++)
-        {
-            hashNext(t_shape, it + j);
-            hashNext(shape, it + j);
-            p1 = getBucket(index.bucketMap, t_shape.hValue);
-            p2 = getDir(index1, shape);
-            if (index.dir[p1+1] - index.dir[p1] != _getBodyCounth(index1.dir[p2 + 1]) - _getBodyCounth(index1.dir[p2]))
-                std::cout << index.dir[p1+1] - index.dir[p1] << " " << _getBodyCounth(index1.dir[p2 + 1]) - _getBodyCounth(index1.dir[p2]) << " " << shape.hValue<< std::endl;
-            if ((uint64_t)t_shape.hValue - (uint64_t)shape.hValue)
-                std::cout << "    hValue unequal" << j << " " <<  t_shape.hValue << " " <<  shape.hValue << std::endl;
-            v1=h2y(shape, index.bucketMap.qgramCode[getBucket(index.bucketMap, t_shape.hValue)]);
-            v2=_getBodyValue(index1.dir[getDir(index1, shape)]);
-            if (v1 != v2)
-                if (v1 ^ h2y(shape, BucketMap<uint64_t>::EMPTY) || v2 ^ _bitEmpty)
-                    std::cout << "    YValue unequal " << t_shape.hValue << " " << getDir(index1, shape) << " " << shape.hValue << " " << v2 << std::endl;
-        }
-    }
-    std::cout << "    s = " << s << std::endl;
-    std::cout << "    End umTest() " << std::endl;
-    return 0;
-}
-
-
-uint64_t hashBit(uint64_t key) {
-  key = (~key) + (key << 21); // key = (key << 21) - key - 1;
-  key = key ^ (key >> 24);
-  key = (key + (key << 3)) + (key << 8); // key * 265
-  key = key ^ (key >> 14);
-  key = (key + (key << 2)) + (key << 4); // key * 21
-  key = key ^ (key >> 28);
-  key = key + (key << 31);
-  return key;
-}
 /*
-inline uint64_t hashInit1(TShape & shape, TIter it)
-{
-    hashInit(shape, it);
-    return shape.hValue;
-}
-
-inline uint64_t hashNext(TShape & shape, TIter it)
-{
-    sha
-}
-*/
-
-uint64_t _min(TShape me, uint64_t hValue)
-{
-    uint64_t v1;
-    me.XValue = 1<<63;
-    for (unsigned k = 64-(me.span << 1) ; k <= 64 - (me.weight << 1); k+=2)
-    {   
-        v1 = hValue << k >> (64-(me.weight<<1));
-        if(me.XValue > v1) 
-        {   
-            me.XValue=v1;
-        }   
-    }   
-    return me.XValue;
-}
-
-int hTest(StringSet<DnaString> & reads)
-{
-    std::cout << "hTest() " << std::endl;
-    TShape shape;
-    uint64_t sum = 0;
-    double time = sysTime();
-    for (uint64_t j = 0; j < length(reads); j++)   
-    { 
-        TIter it = begin(reads[j]);
-        hashInit(shape, it);
-        for (uint64_t k = 0; k < length(reads[j]); k++)
-        {
-            hashNext(shape, it + k);
-            //sum^=_min(shape, hashBit(shape.hValue));
-            std::cout << std::bitset<64> (_min(shape, hashBit(shape.hValue))) << " " << std::bitset<64> (hashBit(shape.hValue)) << std::endl;
-        }
-    }
-    
-    std::cout << "    hashNext() " << sysTime() - time << "\n    " << sum << std::endl;
-}
-
 void _sort1(String<Pair<uint64_t, uint64_t> > & arr, String<Pair<uint64_t, uint64_t> > &hs, uint64_t const & p_bit, uint64_t const & l)
 {
     uint64_t l_move = 64, r_move = 64 - p_bit, count[1<<p_bit];
@@ -424,9 +88,10 @@ void _sort(String<Pair<uint64_t, uint64_t> > & arr, uint64_t const & p_bit, uint
     }
 }
 
-void _sort2(String<Pair<uint64_t, uint64_t> > & arr, uint64_t const & p_bit, uint64_t const & l)
+void _sort2(String<Pair<uint64_t, uint64_t> > & arr, unsigned const & p_bit, unsigned const & l)
 {
-    uint64_t l_move = 64, r_move = 64 - p_bit, count[1<<p_bit];
+    unsigned  l_move = 64, r_move = 64 - p_bit;
+    uint64_t count[1<<p_bit];
     String<Pair<uint64_t, uint64_t> > output;
     resize(output, length(arr));
     for (uint64_t j = 0; j < l; j++) 
@@ -435,22 +100,138 @@ void _sort2(String<Pair<uint64_t, uint64_t> > & arr, uint64_t const & p_bit, uin
         for (uint64_t k = 0; k< (1<<p_bit); k++)
             count[k]=0;
         for (uint64_t k = 0; k < length(arr); k++) 
-            count[arr[k].i2 << l_move >> r_move]++;
+            count[arr[k].i1 << l_move >> r_move]++;
         for (uint64_t k = 1; k < (1 << p_bit); k++)
-        {
             count[k] += count[k - 1];  
-        } 
         for (int64_t k = length(arr)-1; k >=0; k-- )
-        {
-            output[--count[arr[k].i2 << l_move >> r_move]] = arr[k];
+            output[--count[arr[k].i1 << l_move >> r_move]] = arr[k];
             //count[arr[k] << l_move >> r_move]--;
-        }
         
         arr = output;
     }
 }
+*/
 
+template <typename TIt>
+inline void _sort3(TIt const & begin, const TIt & end, unsigned const & p_bit, unsigned const & l)
+{
+    unsigned  l_move = 64, r_move = 64 - p_bit;
+    //uint64_t count[1<<p_bit];
+    uint64_t count[1024];
+    //int count[1024];
+    String<Pair<uint64_t, uint64_t> > output;
+    resize(output, end - begin);
+    for (uint64_t j = 0; j < l; j++)
+    {
+        l_move -= p_bit;
+        for (int k = 0; k< (1<<p_bit); k++)
+            count[k]=0;
+        for (int64_t k = 0; k < end - begin; k++)
+            count[(begin + k)->i1 << l_move >> r_move]++;
+        for (int k = 1; k < (1 << p_bit); k++)
+            count[k] += count[k - 1];
+        for (int64_t k = end - begin - 1; k >=0; k-- )
+            output[--count[(begin + k)->i1 << l_move >> r_move]] = *(begin + k);
+        for (int64_t k = 0; k < end - begin; k++)
+            *(begin + k)  = output[k];
+    }
+}
 
+/*
+template <typename TIt>
+inline void _sort3I2(TIt const & begin, const TIt & end, unsigned const & p_bit, unsigned const & l)
+{
+    unsigned  l_move = 64, r_move = 64 - p_bit;
+    uint64_t count[1<<p_bit];
+    //String<Pair<uint64_t, uint64_t> > output;
+    Pair<uint64_t, uint64_t> output[end - begin];
+    //resize(output, end - begin);
+    for (uint64_t j = 0; j < l; j++)
+    {
+        l_move -= p_bit;
+        for (uint64_t k = 0; k< (1<<p_bit); k++)
+            count[k]=0;
+        for (uint64_t k = 0; k < end - begin; k++)
+            count[(begin + k)->i2 << l_move >> r_move]++;
+        for (uint64_t k = 1; k < (1 << p_bit); k++)
+            count[k] += count[k - 1];
+        for (int64_t k = end - begin -1; k >=0; k-- )
+            output[--count[(begin + k)->i2 << l_move >> r_move]] = *(begin + k);
+        for (uint64_t k = 0; k < end - begin; k++)
+            *(begin + k)  = output[k];
+    }
+}
+
+template <typename TIt>
+inline void _sort3I22(TIt const & begin, const TIt & end, unsigned const & p_bit, unsigned const & l)
+{
+    unsigned  l_move = 64, r_move = 64 - p_bit;
+    uint64_t count[1<<p_bit];
+    //String<Pair<uint64_t, uint64_t> > output;
+    Pair<uint64_t, uint64_t> output[end - begin];
+    //resize(output, end - begin);
+    for (uint64_t j = 0; j < l; j++)
+    {
+        l_move -= p_bit;
+        for (unsigned k = 0; k< (1<<p_bit); k++)
+            count[k]=0;
+        for (uint64_t k = 0; k < end - begin; k++)
+            count[(begin + k)->i2 << l_move >> r_move]++;
+        for (unsigned k = (1 << p_bit) - 2; k >=0;  k--)
+            count[k] += count[k + 1];
+        for (int64_t k = 0; k < end - begin; k++)
+            output[--count[(begin + k)->i2 << l_move >> r_move]] = *(begin + k);
+        for (uint64_t k = 0; k < end - begin; k++)
+            *(begin + k)  = output[k];
+    }
+}
+*/
+
+template <typename TIt>
+inline void _insertSort(TIt const & begin, TIt const & end )
+{
+    Pair<uint64_t, uint64_t> key;
+    for (int j = 1; j < end - begin; j++)
+    {
+        key = *(begin + j);
+        int k = j - 1;
+        while (k >= 0)
+        {
+            if (((begin + k)->i2 < key.i2))
+                *(begin+k+1) = *(begin+k);
+            else
+            {
+                break;
+            }
+            k--;
+        }    
+        *(begin+k+1) = key;
+    }
+}
+
+template <typename TIt>
+inline void _insertSort2(TIt const & begin, TIt const & end )
+{
+    Pair<uint64_t, uint64_t> key;
+    for (int j = 1; j < end - begin; j++)
+    {
+        key = *(begin + j);
+        int k = j - 1;
+        while (k >= 0)
+        {
+            if (((begin + k)->i2 < key.i2))
+                *(begin+k+1) = *(begin+k);
+            else
+            {
+                break;
+            }
+            k--;
+        }    
+        *(begin+k+1) = key;
+    }
+}
+
+/*
 void _sort(String<uint64_t> & arr, uint64_t const & p_bit, uint64_t const & l)
 {
     uint64_t l_move = 64, r_move = 64 - p_bit, count[1<<p_bit];
@@ -477,6 +258,7 @@ void _sort(String<uint64_t> & arr, uint64_t const & p_bit, uint64_t const & l)
     }
 }
 
+
 void radix_sort(uint64_t *begin, uint64_t *end)
 {
     uint64_t *begin1 = new uint64_t[end - begin];
@@ -495,7 +277,429 @@ void radix_sort(uint64_t *begin, uint64_t *end)
     }
     delete[] begin1;
 }
+*/
 
+//-----------------------------------------------------------------------------
+// test if sort functions are correct
+//-----------------------------------------------------------------------------
+int sTest4(StringSet<DnaString> & reads)
+{
+    typedef String<Pair<uint64_t, uint64_t>> StringPair;
+
+    TShape shape;    
+    StringPair hs, hs_std, tmp;
+    uint64_t m = 0;
+    std::cout << " sTest4()" << std::endl;
+
+    resize(hs, lengthSum(reads) - length(reads) * (shape.span - 1));
+    resize(tmp, lengthSum(reads) - length(reads) * (shape.span - 1));
+    for(uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            hs[m].i1 = shape.XValue;
+            hs[m++].i2 = shape.YValue;
+        }
+    }
+    tmp = hs;
+
+    hs = tmp; 
+    _insertSort(begin(hs), end(hs));
+    
+    hs_std = tmp;
+    std::sort(begin(hs_std), end(hs_std), [](Pair<uint64_t, uint64_t> & a, Pair<uint64_t, uint64_t> & b){return a.i2 > b.i2;});
+    
+    std::cout << "done " << std::endl;
+    for (uint64_t n = 0; n < length(hs) - 1; n++)
+    {
+        if (hs[n].i2 != hs_std[n].i2)
+        {
+            std::cout << "    Error " << hs[n] << " " << hs_std[n]<< std::endl;
+        }
+    }
+    return 0;
+}
+/*
+int sTest1(StringSet<DnaString> & reads)
+{
+    typedef String<Pair<uint64_t, uint64_t>> StringPair;
+
+    TShape shape;    
+    StringPair hs, tmp;
+    uint64_t m = 0;
+    std::cout << " sTest1()" << std::endl;
+
+    resize(hs, lengthSum(reads) - length(reads) * (shape.span - 1) + 1);
+    resize(tmp, lengthSum(reads) - length(reads) * (shape.span - 1) + 1);
+    for(uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            hs[m].i1 = shape.XValue;
+            hs[m++].i2 = shape.YValue;
+        }
+    }
+    tmp = hs;
+    double time = sysTime();
+    for (uint64_t k = 1; k <= shape.weight * 2; k++)
+    {
+        uint64_t l = 2*shape.weight/k;
+        if (l * k != 2*shape.weight)
+            l++;
+        hs = tmp; 
+        time = sysTime();
+        _sort2(hs, k, l);
+        std::cout << "    End sort sysTime(): " << k << " " << l << " " << hs[2] << " " << sysTime() - time << std::endl;
+        for (uint64_t n = 0; n < length(hs) - 1; n++)
+            if (hs[n+1].i1 < hs [n].i1)
+            {
+                std::cout << "    Error " << hs[n] << std::endl;
+            }
+    }
+}
+*/
+
+void _createValueArray(StringSet<DnaString> & reads, String<Pair<uint64_t, uint64_t> > & hs, unsigned & step, unsigned & l)
+{
+    typedef String<Pair<uint64_t, uint64_t>> StringPair;
+
+    TShape shape;    
+    StringPair tmp;
+    String<uint64_t> tmp3;
+    uint64_t p = 0, q=0, c = 0, n = -1, pre = ~0, count = 0, mask = ((uint64_t)1 << 63);
+    std::cout << "    _createValueArray() " << std::endl;
+    double time = sysTime();
+    resize(tmp, lengthSum(reads) - length(reads) * (shape.span - 1));
+    resize(tmp3, lengthSum(reads) - length(reads) * (shape.span - 1));
+    for(uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            tmp3[p] = shape.YValue;
+            if (pre ^ shape.XValue)
+            {
+                tmp[q].i1 = shape.XValue;
+                tmp[q].i2 = p;
+                pre = shape.XValue;
+                tmp3[p] |= mask;
+                q++;
+            }
+            p++;            
+        }
+    }
+    resize(tmp, q);
+    *(end(tmp3)) |= (mask);
+
+    std::cout << "        loading time " << sysTime() - time << std::endl;
+    c = tmp[0].i2;  
+    p = q = count = 0;
+    n = -1;
+    _sort3(begin(tmp), end(tmp), step, l);         // sort parameters 1
+    std::cout << "        sort xvalue time " << sysTime() - time << std::endl;
+    c = tmp[0].i2;
+    for (uint64_t q = 0;  q < length(hs) - 1; q++)
+    {
+        if (tmp3[c] & mask)
+        {
+            c = tmp[++n].i2;
+        }
+        hs[q].i1 = tmp[n].i1;
+        hs[q].i2 = tmp3[c] & (~mask);
+        c++;
+    }
+    std::cout << "        xvalue expand " << sysTime() - time << std::endl;
+    hs[length(hs)-1].i2 |= mask;
+    pre = hs[0].i1;
+    for (uint64_t k = 0; k < length(hs); k++)
+    {
+        if (pre ^ hs[k].i1)
+        {   
+            pre = hs[k].i1;
+            if (count < 20)                   // sort parameters
+                _insertSort(begin(hs) + k - count, begin(hs) + k);
+            else 
+                std::sort(begin(hs) + k -count, begin(hs) + k, [](Pair<uint64_t, uint64_t> & a, 
+                Pair<uint64_t, uint64_t> & b){return a.i2 > b.i2;});
+            count = 0;
+        }
+        count++;
+   } 
+
+
+   std::cout << "        End sort sysTime(): " <<  sysTime() - time << std::endl;
+}
+
+//--------------------------------------------------------------------
+// create sa array at the same time
+//--------------------------------------------------------------------
+void _createValueArray2(StringSet<DnaString> & reads, String<Pair<uint64_t, uint64_t> > & hs, unsigned & step, unsigned & l)
+{
+    typedef String<Pair<uint64_t, uint64_t>> StringPair;
+
+    TShape shape;    
+    StringPair tmp;
+    String<uint64_t> tmp3;
+    uint64_t p = 0, q=0, c = 0, n = -1, pre = ~0, count = 0, mask = ((uint64_t)1 << 63);
+    std::cout << "    _createValueArray() " << std::endl;
+    double time = sysTime();
+    resize(tmp, lengthSum(reads) - length(reads) * (shape.span - 1));
+    resize(tmp3, lengthSum(reads) - length(reads) * (shape.span - 1));
+    for(uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            _setBodyNode(tmp3[p], shape.YValue, (uint64_t)1, _createSANode(j, k));
+            if (pre ^ shape.XValue)
+            {
+                tmp[q].i1 = shape.XValue;
+                tmp[q].i2 = p;
+                pre = shape.XValue;
+                tmp3[p] |= mask;
+                q++;
+            }
+            p++;            
+        }
+    }
+    resize(tmp, q);
+    *(end(tmp3)) |= (mask);
+
+    std::cout << "        loading time " << sysTime() - time << std::endl;
+    c = tmp[0].i2;  
+    p = q = count = 0;
+    n = -1;
+    _sort3(begin(tmp), end(tmp), step, l);         // sort parameters 1
+    std::cout << "        sort xvalue time " << sysTime() - time << std::endl;
+    c = tmp[0].i2;
+    for (uint64_t q = 0;  q < length(hs) - 1; q++)
+    {
+        if (tmp3[c] & mask)
+        {
+            c = tmp[++n].i2;
+        }
+        hs[q].i1 = tmp[n].i1;
+        hs[q].i2 = tmp3[c] & (~mask);
+        c++;
+    }
+    std::cout << "        xvalue expand " << sysTime() - time << std::endl;
+    hs[length(hs)-1].i2 |= mask;
+    pre = hs[0].i1;
+    for (uint64_t k = 0; k < length(hs); k++)
+    {
+        if (pre ^ hs[k].i1)
+        {   
+            pre = hs[k].i1;
+            if (count < 20)                   // sort parameters
+                _insertSort(begin(hs) + k - count, begin(hs) + k);
+            else 
+                std::sort(begin(hs) + k -count, begin(hs) + k, [](Pair<uint64_t, uint64_t> & a, 
+                Pair<uint64_t, uint64_t> & b){return a.i2 > b.i2;});
+            count = 0;
+        }
+        count++;
+   } 
+
+
+   std::cout << "        End sort sysTime(): " <<  sysTime() - time << std::endl;
+}
+
+//-----------------------------------------------------------------------------
+// test if _creatValueArray() is correct
+//-----------------------------------------------------------------------------
+void sTest3(StringSet<DnaString> & reads, unsigned & step, unsigned l)
+{
+    std::cout << "sTest3() " << std::endl; 
+    String<Pair<uint64_t, uint64_t> > hs, hs_std;
+    TShape shape;
+    resize(hs, lengthSum(reads) - length(reads) * (shape.span - 1) + 1);
+    resize(hs_std, lengthSum(reads) - length(reads) * (shape.span - 1));
+    _createValueArray(reads, hs, step, l);
+    for (uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            hs_std[k].i1 = shape.XValue;
+            hs_std[k].i2 = shape.YValue;
+        }
+    }
+    std::sort(begin(hs_std), end(hs_std), [](Pair<uint64_t, uint64_t> & a, 
+    Pair<uint64_t, uint64_t> & b){return a.i1 < b.i1 || (a.i1 == b.i1 && a.i2 > b.i2);}); 
+
+    for (uint64_t k = 0; k < length(hs) - 1; k++)
+    {
+        if (hs[k] != hs_std[k])
+        {
+            std::cout << hs[k] << " " << hs_std[k] << std::endl;
+        }
+    }
+    std::cout << "    End sTest3 " << std::endl;
+
+}
+
+void sTest3_(StringSet<DnaString> & reads, unsigned & step, unsigned l)
+{
+    std::cout << "sTest3_() " << std::endl; 
+    String<Pair<uint64_t, uint64_t> > hs, hs_std;
+    TShape shape;
+    resize(hs, lengthSum(reads) - length(reads) * (shape.span - 1) + 1);
+    resize(hs_std, lengthSum(reads) - length(reads) * (shape.span - 1));
+    _createValueArray2(reads, hs, step, l);
+    for (uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            hs_std[k].i1 = shape.XValue;
+            hs_std[k].i2 = shape.YValue;
+        }
+    }
+    std::sort(begin(hs_std), end(hs_std), [](Pair<uint64_t, uint64_t> & a, 
+    Pair<uint64_t, uint64_t> & b){return a.i1 < b.i1 || (a.i1 == b.i1 && a.i2 > b.i2);}); 
+
+    for (uint64_t k = 0; k < length(hs) - 1; k++)
+    {
+        if (hs[k].i1 != hs_std[k].i1 || _getBodyValue(hs[k].i2) != hs_std[k].i2)
+        {
+            std::cout << hs[k] << " " << hs_std[k] << std::endl;
+        }
+    }
+    std::cout << "    End sTest3_ " << std::endl;
+
+}
+
+//-----------------------------------------------------------------------------
+// prototype of _createValueArray()
+//-----------------------------------------------------------------------------
+
+int sTest2(StringSet<DnaString> & reads)
+{
+    typedef String<Pair<uint64_t, uint64_t> > StringPair;
+
+    TShape shape;    
+    StringPair hs, tmp, tmp1, hs_std;
+    String<uint64_t> tmp3;
+    uint64_t p = 0, q=0, c = 0, n = 0, pre = ~0, count = 0, mask = (uint64_t)1 << 63;
+    std::cout << " sTest2()" << std::endl;
+
+    resize(hs, lengthSum(reads) - length(reads) * (shape.span - 1)+1);
+    resize(tmp, lengthSum(reads) - length(reads) * (shape.span - 1));
+    resize(tmp3, lengthSum(reads) - length(reads) * (shape.span - 1));
+    resize(hs_std, lengthSum(reads) - length(reads) * (shape.span - 1));
+
+    for(uint64_t j = 0; j < length(reads); j++)
+    {
+        hashInit(shape, begin(reads[j]));
+        for (uint64_t k = 0; k < length(reads[j]) - shape.span + 1; k++)
+        {
+            hashNext(shape, begin(reads[j]) + k);
+            tmp3[p] = shape.YValue;
+            //std::cout << shape.XValue << " " << shape.YValue << std::endl;
+            hs_std[p].i1 = shape.XValue;
+            hs_std[p].i2 = shape.YValue;
+            if (pre ^ shape.XValue)
+            {
+                tmp[q].i1 = shape.XValue;
+                tmp[q].i2 = p;
+                pre = shape.XValue;
+                tmp3[p] |= mask;
+                q++;
+            }
+            p++;            
+        }
+    }
+    *end(tmp3) |= mask;
+    //tmp3 = hs;
+    //hs = hs_std;
+    double time = sysTime();
+    std::sort(begin(hs_std), end(hs_std), [](Pair<uint64_t, uint64_t> & a, Pair<uint64_t, uint64_t> & b){return a.i1 < b.i1 ||(a.i1==b.i1 && a.i2> b.i2);});
+    std::cout << sysTime() - time << std::endl;
+    resize(tmp, q);
+    resize(tmp1, q);
+    tmp1 = tmp;
+    time = sysTime();
+    for (uint64_t k = 8; k < 9; k++)
+    //for (uint64_t k = 5; k <= shape.weight * 2; k++)
+    {
+       // uint64_t l = 2*shape.weight/k;
+        //if (l * k != 2*shape.weight)
+        //    l++;
+        //tmp = tmp1; 
+        p = 0;
+        q = 0;
+        n = -1;
+        count = 0;
+        time = sysTime();
+        //_sort2(tmp, k, l);
+        //_sort2(hs, k, l);
+        _sort3(begin(tmp), end(tmp), 8, 6);
+        //std::sort(begin(tmp), end(tmp), [](Pair<uint64_t, uint64_t> & a, Pair<uint64_t, uint64_t> & b){return a.i1 > b.i1;});
+        c = tmp[0].i2;
+        //std::cout << "& " << (tmp3[c] & mask) << " " << std::bitset<64>(tmp3[c]) << " " << std::bitset<64>(~mask)<< std::endl;
+
+        for (uint64_t q = 0;  q < length(hs) - 1; q++)
+        {
+            if (tmp3[c] & mask)
+            {
+                c = tmp[++n].i2;
+            }
+            hs[q].i1 = tmp[n].i1;
+            hs[q].i2 = tmp3[c] & (~mask);
+            //std::cout << n << " " << tmp3[c] << " " << c << std::endl;
+            c++;
+        }
+        hs[length(hs)-1].i2 |= mask;
+        pre = hs[0].i1;
+        for (uint64_t k = 0; k < length(hs); k++)
+        {
+            if (k < 100)
+                std::cout <<pre << " " << hs[k].i1 << count << std::endl;
+            if (pre ^ hs[k].i1)
+            {   
+                pre = hs[k].i1;
+                if (count < 20)
+                    _insertSort(begin(hs) + k - count, begin(hs) + k);
+                else 
+                    //_sort3I22(begin(hs) + k - count, begin(hs) + k, 6, 3);
+                //if (count > 2)
+                    std::sort(begin(hs) + k -count, begin(hs) + k, [](Pair<uint64_t, uint64_t> & a, Pair<uint64_t, uint64_t> & b){return a.i2 > b.i2;});
+                count = 0;
+            }
+            count++;
+        }
+        
+
+
+        std::cout << "    End sort sysTime(): " <<  sysTime() - time << std::endl;
+
+        for (uint64_t n = 0; n < length(hs) - 1; n++)
+        { 
+            if (hs[n] != hs_std[n])
+            {
+                std::cout << n << " " <<  hs[n] << " " << hs_std[n] << std::endl;
+            }
+            //std::cout << hs[n]<< " " << hs_std[n]<< std::endl;
+            //if (hs[n+1].i1 < hs[n].i1)
+            //{
+            //    
+            //    std::cout << "    Error" << hs[n - 1] << " " << hs[n] << " " << hs[n + 1] << std::endl;
+            //    break;
+            //    //return 1;
+            //}
+        }
+    }
+    return 0;
+}
+/*
 int sTest(StringSet<DnaString> & reads)
 {
     typedef typename Value<TShape>::Type HValue;
@@ -638,7 +842,9 @@ int sTest(StringSet<DnaString> & reads)
 
     return 0;
 }
+*/
 
+/*
 inline void _countSort(String<uint64_t> & arr, String<uint64_t> & output, uint64_t const & l_move, uint64_t const & r_move, uint64_t const & p_bit, uint64_t const & l)
 {
     uint64_t count[1 << p_bit] = {0};
@@ -656,6 +862,7 @@ inline void _countSort(String<uint64_t> & arr, String<uint64_t> & output, uint64
 
     arr = output;
 }
+*/
 
 //void _sort(String<uint64_t> & arr, uint64_t const & p_bit, uint64_t const & l)
 //{
@@ -717,12 +924,23 @@ int main(int argc, char** argv)
     StringSet<DnaString> genome;
     readRecords(ids, reads, rFile);
     readRecords(ids, genome, gFile);
+    unsigned step = atof(toCString(argv[3]));
+    unsigned l = atof(toCString(argv[4]));
     //std::cout << "read done sysTime " << sysTime() - time << std::endl;
     //umTest(reads, genome);
     //uTest(reads, genome);
-    mTest1(reads, genome);
+    //mTest1(reads, genome);
     //mTest2(reads, genome);
     //hTest(reads);
     //sTest(reads);
+    //sTest1(reads);
+    //sTest2(reads);
+    //while (true)
+    //{
+        std::cout << " step = " << step << " l = " << l << std::endl;
+        //sTest3(reads, step, l);
+        sTest3_(reads, step, l);
+    //}
+    //sTest4(reads);
     return 0;
 }
